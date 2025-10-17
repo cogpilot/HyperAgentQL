@@ -1,0 +1,2 @@
+# HyperAgentQL
+Agentic Hyper-GraphQL
