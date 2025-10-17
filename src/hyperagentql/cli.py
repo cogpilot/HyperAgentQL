@@ -12,9 +12,9 @@ import json
 import time
 from typing import Optional, Dict, Any
 
-from .cognitive_architecture import CognitiveArchitecture, ArchitectureMode
-from .recursive_inference import RecursionLevel
-from .autogenesis import BootstrapPhase
+from hyperagentql.cognitive_architecture import CognitiveArchitecture, ArchitectureMode
+from hyperagentql.recursive_inference import RecursionLevel
+from hyperagentql.autogenesis import BootstrapPhase
 
 
 def create_demo_input(input_type: str = "random", size: int = 64) -> np.ndarray:

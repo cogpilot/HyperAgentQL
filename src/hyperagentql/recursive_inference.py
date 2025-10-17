@@ -338,7 +338,7 @@ class MetaRecursion(RecursiveInferenceLayer):
             nn.Linear(self.meta_dim, self.strategy_dim),
             nn.SELU(),
             nn.Linear(self.strategy_dim, self.strategy_dim),
-            nn.BatchNorm1d(self.strategy_dim),
+            nn.LayerNorm(self.strategy_dim),  # Use LayerNorm instead of BatchNorm
             nn.SELU(),
             nn.Linear(self.strategy_dim, self.meta_dim)
         )
@@ -424,14 +424,11 @@ class MetaRecursion(RecursiveInferenceLayer):
             prev_meta = torch.tensor(self.meta_memory[-2], dtype=torch.float32)
             curr_meta = torch.tensor(recursive_result.state_vector, dtype=torch.float32)
             
-            # Pad shorter tensor
-            max_len = max(len(prev_meta), len(curr_meta))
-            if len(prev_meta) < max_len:
-                prev_meta = torch.cat([prev_meta, torch.zeros(max_len - len(prev_meta))])
-            if len(curr_meta) < max_len:
-                curr_meta = torch.cat([curr_meta, torch.zeros(max_len - len(curr_meta))])
+            # Ensure consistent dimensions for concatenation
+            meta_part = prev_meta[:self.meta_dim] if len(prev_meta) >= self.meta_dim else torch.cat([prev_meta, torch.zeros(self.meta_dim - len(prev_meta))])
+            strategy_part = curr_meta[:self.strategy_dim] if len(curr_meta) >= self.strategy_dim else torch.cat([curr_meta, torch.zeros(self.strategy_dim - len(curr_meta))])
             
-            adaptation_input = torch.cat([prev_meta[:self.meta_dim], curr_meta[:self.strategy_dim]])
+            adaptation_input = torch.cat([meta_part, strategy_part])
             adapted = self.adaptation_network(adaptation_input)
         else:
             adapted = torch.tensor(recursive_result.state_vector, dtype=torch.float32)
@@ -521,6 +518,13 @@ class RecursiveInference:
         
         # Bridge micro to macro
         micro_tensor = torch.tensor(micro_result.state_vector, dtype=torch.float32)
+        # Ensure tensor is right size for bridge
+        if len(micro_tensor) != self.input_dim:
+            if len(micro_tensor) > self.input_dim:
+                micro_tensor = micro_tensor[:self.input_dim]
+            else:
+                micro_tensor = torch.cat([micro_tensor, torch.zeros(self.input_dim - len(micro_tensor))])
+        
         macro_input = self.micro_to_macro(micro_tensor)
         
         macro_state = InferenceState(
@@ -536,6 +540,13 @@ class RecursiveInference:
         
         # Bridge macro to meta
         macro_tensor = torch.tensor(macro_result.state_vector, dtype=torch.float32)
+        # Ensure tensor is right size for bridge
+        if len(macro_tensor) != 256:  # Expected macro dimension
+            if len(macro_tensor) > 256:
+                macro_tensor = macro_tensor[:256]
+            else:
+                macro_tensor = torch.cat([macro_tensor, torch.zeros(256 - len(macro_tensor))])
+        
         meta_input = self.macro_to_meta(macro_tensor)
         
         meta_state = InferenceState(
@@ -551,6 +562,13 @@ class RecursiveInference:
         
         # Top-down influence: Meta back to Macro
         meta_tensor = torch.tensor(meta_result.state_vector, dtype=torch.float32)
+        # Ensure tensor is right size
+        if len(meta_tensor) != 512:  # Expected meta dimension
+            if len(meta_tensor) > 512:
+                meta_tensor = meta_tensor[:512]
+            else:
+                meta_tensor = torch.cat([meta_tensor, torch.zeros(512 - len(meta_tensor))])
+        
         meta_to_macro_influence = self.meta_to_macro(meta_tensor)
         
         # Combine macro result with meta influence
@@ -558,6 +576,13 @@ class RecursiveInference:
         
         # Macro back to Micro
         enhanced_macro_tensor = torch.tensor(enhanced_macro, dtype=torch.float32)
+        # Ensure tensor is right size
+        if len(enhanced_macro_tensor) != 256:
+            if len(enhanced_macro_tensor) > 256:
+                enhanced_macro_tensor = enhanced_macro_tensor[:256]
+            else:
+                enhanced_macro_tensor = torch.cat([enhanced_macro_tensor, torch.zeros(256 - len(enhanced_macro_tensor))])
+        
         macro_to_micro_influence = self.macro_to_micro(enhanced_macro_tensor)
         
         # Final integration
